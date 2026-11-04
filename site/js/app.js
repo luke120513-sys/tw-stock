@@ -118,9 +118,57 @@
     button.setAttribute("aria-label", dark ? "改用淺色" : "改用深色");
   }
 
+  function stockAlerts(item) {
+    if (!item) return [];
+    if (item.alerts && item.alerts.length) return item.alerts;
+    if (item.change_pct != null && Math.abs(item.change_pct) >= 3) {
+      return [{ title: item.change_pct > 0 ? "今天漲超過 3%" : "今天跌超過 3%", detail: todaySentence(item.change_pct) }];
+    }
+    return [];
+  }
+
+  function renderAlerts() {
+    const root = document.getElementById("alerts");
+    if (!root || !state.catalog) return;
+    clear(root);
+    const hits = state.watch.map(byCode).filter(function (item) { return item && stockAlerts(item).length; });
+    if (!hits.length) {
+      root.append(el("p", { class: "empty panel", text: "今天追蹤的股票沒有明顯異動。" }));
+      return;
+    }
+    hits.forEach(function (item) {
+      root.append(el("article", { class: "card" }, [
+        el("h3", { text: item.name + " " + item.code }),
+        el("p", { class: "today " + signClass(item.change_pct), text: todaySentence(item.change_pct) }),
+        lightRow(isGreen(item), true),
+      ].concat(stockAlerts(item).map(function (alert) {
+        return el("p", { class: "reason", text: (alert.title || "") + (alert.detail ? "。" + alert.detail : "") });
+      }))));
+    });
+  }
+
+  function showTab(name, push) {
+    const tabs = ["watch", "market", "alerts", "more"];
+    if (tabs.indexOf(name) < 0) name = "watch";
+    tabs.forEach(function (id) {
+      document.getElementById("panel-" + id).hidden = id !== name;
+      const button = document.querySelector('nav [data-tab="' + id + '"]');
+      if (button) button.classList.toggle("on", id === name);
+    });
+    const titles = { watch: "看能不能抄底", market: "今天的大盤", alerts: "追蹤股的異動", more: "說明與設定" };
+    const sub = document.getElementById("subtitle");
+    if (sub) sub.textContent = titles[name];
+    const hash = "#" + name;
+    if (location.hash !== hash) {
+      if (push) history.pushState(null, "", hash);
+      else history.replaceState(null, "", hash);
+    }
+  }
+
   function renderUpdated() {
     const data = state.catalog;
-    document.getElementById("updated").textContent = "資料更新時間 " + zhWhen(data.generated_at) + "（台北）・收盤日 " + zhDate(data.trade_date);
+    const updated = document.getElementById("updated");
+    if (updated) updated.textContent = "資料更新時間 " + zhWhen(data.generated_at) + "（台北）・收盤日 " + zhDate(data.trade_date);
     const count = data.count || (data.stocks || []).length;
     document.getElementById("coverage").textContent = "目前可以找 " + count + " 檔上市股票和ETF。" + (data.coverage || "");
   }
@@ -134,11 +182,13 @@
       return;
     }
     root.append(
-      el("p", { class: "hint", text: "大盤" }),
+      el("div", { class: "card" }, [
+      el("p", { class: "hint", text: "發行量加權股價指數" }),
       el("p", { class: "price", text: num(market.close, 2) }),
       el("p", { class: "today " + signClass(market.change_pct), text: todaySentence(market.change_pct) }),
       el("p", { text: "今天全市場成交 " + money(market.turnover) }),
       market.plain_flow ? el("p", { class: "market-flow", text: "大戶今天：" + market.plain_flow + "。" }) : null
+      ])
     );
     const details = el("details", { class: "more" }, [
       el("summary", { text: "進階資訊" }),
@@ -331,12 +381,14 @@
     state.watch = state.watch.filter(function (item) { return item !== code; });
     saveWatch();
     renderList();
+    renderAlerts();
   }
 
   function addCode(code) {
     if (!state.watch.includes(code)) state.watch.unshift(code);
     saveWatch();
     renderList();
+    renderAlerts();
     const card = document.getElementById("stock-" + code);
     if (card) card.scrollIntoView({ block: "center" });
     document.getElementById("q").value = "";
@@ -404,6 +456,10 @@
       paintTheme();
       renderMarket();
     });
+    document.querySelectorAll("nav [data-tab]").forEach(function (button) {
+      button.addEventListener("click", function () { showTab(button.getAttribute("data-tab"), true); });
+    });
+    window.addEventListener("hashchange", function () { showTab(location.hash.slice(1), false); });
     const input = document.getElementById("q");
     input.addEventListener("input", function () { search(input.value); });
     document.addEventListener("click", function (event) {
@@ -420,6 +476,8 @@
         renderUpdated();
         renderMarket();
         renderList();
+        renderAlerts();
+        showTab((location.hash || "#watch").slice(1), false);
       })
       .catch(function () {
         document.getElementById("updated").textContent = "行情檔讀不到。請稍後再打開。";

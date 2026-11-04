@@ -272,6 +272,7 @@ def build_stock(item: dict, rows: list[dict], foreign_by_date: dict, valuation: 
     for cond in bottom["conditions"]:
         cond["plain"] = ind.PLAIN_CONDITION.get(cond["id"], cond["name"])
     change, change_pct = ind.price_change(enriched)
+    alerts = ind.build_alerts(enriched, change_pct)
     latest = enriched[-1]
     return {
         "code": item["code"],
@@ -284,6 +285,7 @@ def build_stock(item: dict, rows: list[dict], foreign_by_date: dict, valuation: 
         "label": view["label"],
         "reason": view["reason"],
         "reasons": view["reasons"],
+        "alerts": [{"id": item["id"], "title": item["title"], "detail": item["detail"]} for item in alerts],
         "score": view["score"],
         "max_score": 6,
         "cutoff": ind.DIP_CUTOFF,
@@ -320,6 +322,7 @@ def summary_of(payload: dict) -> dict:
         "label": payload.get("label") or ("可以抄底" if payload.get("can_bottom") else "不行"),
         "reason": payload.get("reason") or "",
         "score": payload.get("score"),
+        "alerts": payload.get("alerts") or [],
     }
 
 
