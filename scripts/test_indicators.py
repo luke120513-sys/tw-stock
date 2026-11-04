@@ -244,6 +244,44 @@ def test_merge_keeps_last_good_without_inventing():
     assert fresh["stocks"] == []
 
 
+def test_security_filter():
+    import build_site
+
+    assert build_site.include_security("2603", "長榮")
+    assert build_site.include_security("0050", "元大台灣50")
+    assert build_site.include_security("00878", "國泰永續高股息")
+    assert build_site.include_security("00631L", "元大台灣50正2") is False
+    assert build_site.include_security("030001", "某某購") is False
+
+
+def test_binary_dip_signal():
+    def cond(cid, hit):
+        return {"id": cid, "name": cid, "hit": hit}
+
+    low = ind.public_bottom({"score": 2, "conditions": [cond("rsi", True), cond("bias", True), cond("kd", False)]})
+    assert low["label"] == "不行"
+    assert low["can_bottom"] is False
+    assert low["cutoff"] == 3
+    assert "有一點" not in low["label"] and "很強" not in low["label"]
+    assert "最近跌太快" in low["reason"] and "所以不行" in low["reason"]
+
+    high = ind.public_bottom(
+        {
+            "score": 3,
+            "conditions": [cond("rsi", True), cond("bias", True), cond("foreign", True)],
+        }
+    )
+    assert high["label"] == "可以抄底"
+    assert high["can_bottom"] is True
+    assert high["label"] in {"可以抄底", "不行"}
+    assert "大戶（外資）開始買進" in high["reason"]
+
+    none = ind.public_bottom({"score": 0, "conditions": [cond("rsi", False)]})
+    assert none["label"] == "不行"
+    assert "沒有出現" in none["reason"]
+    assert ind.DIP_RULE.startswith("六個條件裡")
+
+
 def main():
     tests = [value for name, value in globals().items() if name.startswith("test_")]
     for test in tests:

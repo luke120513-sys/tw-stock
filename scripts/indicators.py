@@ -20,6 +20,7 @@ MA_SLOW = 60
 BIAS_LIMIT = -10.0
 VOL_SHRINK = 0.7
 FOREIGN_SIGNAL_DAYS = 5
+DIP_CUTOFF = 3
 ALERT_CHANGE_PCT = 3.0
 ALERT_VOLUME_RATIO = 1.5
 ALERT_LOW_DAYS = 60
@@ -579,8 +580,48 @@ def round_bar(row: dict) -> dict:
     }
 
 
+PLAIN_CONDITION = {
+    "rsi": "最近跌太快，可能跌過頭",
+    "kd": "短線開始轉強",
+    "boll": "價格掉到比平常還低的地方",
+    "bias": "比近兩個月的平均價便宜很多",
+    "volume": "賣的人變少，價格不再往下破",
+    "foreign": "大戶（外資）開始買進",
+}
+
+DIP_RULE = "六個條件裡，至少三個同時出現，才顯示可以抄底；不到三個就是不行。"
+
+
+def public_bottom(bottom: dict) -> dict:
+    """主畫面只用兩個字面結果：可以抄底，或不行。"""
+    score = int(bottom.get("score") or 0)
+    can = score >= DIP_CUTOFF
+    reasons = []
+    for cond in bottom.get("conditions") or []:
+        if cond.get("hit"):
+            reasons.append(PLAIN_CONDITION.get(cond.get("id"), cond.get("name") or ""))
+    reasons = [item for item in reasons if item]
+    if can:
+        reason = "出現這些情況：" + "、".join(reasons) + "。"
+    elif reasons:
+        reason = "有這些情況：" + "、".join(reasons) + "。還不到三個，所以不行。"
+    else:
+        reason = "今天沒有出現抄底的情況，所以不行。"
+    return {
+        "can_bottom": can,
+        "label": "可以抄底" if can else "不行",
+        "reason": reason,
+        "reasons": reasons,
+        "score": score,
+        "max_score": 6,
+        "cutoff": DIP_CUTOFF,
+    }
+
+
 def rules_payload() -> dict:
     return {
+        "dip_cutoff": DIP_CUTOFF,
+        "dip_rule": DIP_RULE,
         "change_pct": ALERT_CHANGE_PCT,
         "volume_ratio": ALERT_VOLUME_RATIO,
         "low_days": ALERT_LOW_DAYS,

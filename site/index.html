@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="台股大盤重點、觀察清單、異動提醒、個股技術圖與抄底分數。資料來自臺灣證券交易所，僅供參考，不是投資建議。">
-  <meta name="theme-color" content="#f4f1ea">
+  <meta name="description" content="看自己追蹤的台股，現在能不能抄底。只是參考，不是投資建議。">
+  <meta name="theme-color" content="#f6f3ee">
   <title>台股觀察</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="canonical" href="https://luke120513-sys.github.io/tw-stock/">
@@ -28,82 +28,46 @@
 <body>
   <a class="skip" href="#main">跳到內容</a>
   <div class="wrap">
-    <div class="sticky-bar">
-      <header>
-        <div class="brand-row">
-          <div>
-            <p class="eyebrow">上市股票 · 紅漲綠跌 · 僅供參考</p>
-            <h1>台股觀察</h1>
-          </div>
-          <button id="theme" type="button">深色</button>
-        </div>
-        <p id="updated" class="updated">資料載入中…</p>
-      </header>
-      <nav class="tabs" role="tablist" aria-label="主要功能">
-        <button type="button" role="tab" id="tab-market" aria-controls="panel-market" aria-selected="true">大盤</button>
-        <button type="button" role="tab" id="tab-watch" aria-controls="panel-watch" aria-selected="false">觀察清單</button>
-        <button type="button" role="tab" id="tab-alerts" aria-controls="panel-alerts" aria-selected="false">異動 <span id="alert-count" class="badge" hidden>0</span></button>
-        <button type="button" role="tab" id="tab-stock" aria-controls="panel-stock" aria-selected="false">個股</button>
-        <button type="button" role="tab" id="tab-bottom" aria-controls="panel-bottom" aria-selected="false">抄底</button>
-      </nav>
-    </div>
+    <header class="top">
+      <div class="top-row">
+        <h1>台股觀察</h1>
+        <button id="theme" type="button">深色</button>
+      </div>
+      <p class="lead">看你追蹤的股票，現在能不能抄底。</p>
+      <p id="rule" class="rule">六個條件裡，至少三個同時出現，才顯示可以抄底；不到三個就是不行。</p>
+      <p class="soft">只是參考，不是投資建議。就算顯示可以抄底，股價還是可能繼續跌。</p>
+      <p id="updated" class="updated">資料載入中…</p>
+    </header>
 
-    <div id="banner"></div>
+    <section class="search-box" aria-label="加入股票">
+      <label for="q">加入想追蹤的股票</label>
+      <input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="輸入代號或名稱，例如 2603 或 長榮">
+      <p class="hint">輸入後點選結果就會加進下面的清單。清單存在這支手機裡，換手機要重新加。</p>
+      <ul id="suggest" class="suggest" hidden></ul>
+      <p id="coverage" class="hint"></p>
+    </section>
+
     <main id="main">
-      <section id="panel-market" class="panel" role="tabpanel" aria-labelledby="tab-market">
-        <div class="section-head">
-          <h2>今日大盤重點</h2>
-          <p class="sub">加權指數收盤、漲跌、成交金額，三大法人買賣超，以及近三個月指數。</p>
-        </div>
-        <div id="market-root" class="stack"></div>
-      </section>
-      <section id="panel-watch" class="panel" role="tabpanel" aria-labelledby="tab-watch" hidden>
-        <div class="section-head">
-          <h2>觀察清單</h2>
-          <p class="sub">預設是六檔權值股。欄位可以排序。有底色的列代表今天觸發異動條件。</p>
-        </div>
-        <div id="watch-root"></div>
-      </section>
-      <section id="panel-alerts" class="panel" role="tabpanel" aria-labelledby="tab-alerts" hidden>
-        <div class="section-head">
-          <h2>異動提醒</h2>
-          <p id="alert-rule" class="sub"></p>
-        </div>
-        <div id="alerts-root" class="stack"></div>
-      </section>
-      <section id="panel-stock" class="panel" role="tabpanel" aria-labelledby="tab-stock" hidden>
-        <div class="section-head">
-          <h2>個股分析</h2>
-          <p class="sub">價格圖含 20 日、60 日均線與布林通道，下面是 RSI、KD，以及外資買賣超。</p>
-        </div>
-        <div id="stock-root" class="stack"></div>
-      </section>
-      <section id="panel-bottom" class="panel" role="tabpanel" aria-labelledby="tab-bottom" hidden>
-        <div class="section-head">
-          <h2>抄底訊號</h2>
-          <p class="sub">每檔 0 到 6 分。多一分，只代表多一個技術條件成立。</p>
-        </div>
-        <div id="bottom-root" class="stack"></div>
+      <section id="market" class="card" aria-live="polite"></section>
+      <section>
+        <h2>我追蹤的股票</h2>
+        <div id="list" class="stack"></div>
       </section>
     </main>
 
     <footer class="site">
-      <p>資料更新時間以台北時間顯示。數字來自公開資訊，休市或來源還沒公布時，頁面會留著上一次成功取得的資料，不會自己補數字。</p>
-      <p>抄底分數只供參考，不是投資建議。分數高仍可能繼續下跌（接刀）。</p>
+      <p>價格是上市股票的公開行情。上櫃股票、權證、槓桿和反向 ETF 目前找不到。</p>
       <p>資料來源</p>
       <ul>
-        <li><a href="https://www.twse.com.tw/zh/trading/historical/fmtqik.html">加權指數與成交金額（FMTQIK）</a></li>
-        <li><a href="https://www.twse.com.tw/zh/trading/foreign/bfi82u.html">三大法人買賣金額（BFI82U）</a></li>
-        <li><a href="https://www.twse.com.tw/zh/trading/historical/stock-day.html">個股日成交（STOCK_DAY）</a></li>
-        <li><a href="https://www.twse.com.tw/zh/trading/foreign/t86.html">三大法人個股買賣超（T86）</a></li>
-        <li><a href="https://www.twse.com.tw/zh/trading/historical/bwibbu.html">本益比、殖利率、股價淨值比（BWIBBU）</a></li>
-        <li><a href="https://openapi.twse.com.tw/">證交所 OpenAPI</a></li>
-        <li><a href="https://www.twse.com.tw/zh/index.html">臺灣證券交易所</a></li>
-        <li><a href="https://github.com/luke120513-sys/tw-stock/blob/main/watchlist.json">修改觀察清單（watchlist.json）</a></li>
+        <li><a href="https://www.twse.com.tw/zh/trading/historical/fmtqik.html">大盤收盤和成交金額</a></li>
+        <li><a href="https://www.twse.com.tw/zh/trading/foreign/bfi82u.html">外資、投信、自營商買賣</a></li>
+        <li><a href="https://www.twse.com.tw/zh/trading/foreign/t86.html">個股的外資買賣</a></li>
+        <li><a href="https://www.twse.com.tw/zh/trading/historical/bwibbu.html">本益比、殖利率、股價淨值比</a></li>
+        <li><a href="https://finance.yahoo.com/">個股日K（Yahoo Finance）</a></li>
       </ul>
     </footer>
   </div>
-  <noscript><p class="wrap">這個頁面需要 JavaScript 才能把行情畫出來。</p></noscript>
+  <noscript><p class="wrap">這個頁面需要開啟 JavaScript 才能顯示股價。</p></noscript>
   <script src="js/charts.js"></script>
   <script src="js/app.js"></script>
 </body>

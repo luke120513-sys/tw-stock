@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "site/data/latest.json"
+      - "site/data/**"
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       PYTHONUNBUFFERED: "1"
     steps:
@@ -40,14 +40,14 @@ jobs:
         run: python scripts/test_indicators.py
 
       - name: 抓取證交所資料
-        run: python scripts/fetch_data.py
+        run: python scripts/build_site.py
 
       - name: 把新資料寫回主線
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data/latest.json
+          git add -A site/data
           if git diff --staged --quiet; then
             echo "資料與倉庫裡的檔案相同，不另外 commit"
           else

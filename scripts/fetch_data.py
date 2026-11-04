@@ -673,13 +673,13 @@ def _compact_ad(value) -> str | None:
     return ind.roc_to_iso(text)
 
 
-def fetch_yahoo(symbol: str, range_: str, offline: bool) -> list[dict]:
+def fetch_yahoo(symbol: str, range_: str, offline: bool, pause: float = 0.3) -> list[dict]:
     quoted = urllib.parse.quote(symbol)
     url = (
         "https://query1.finance.yahoo.com/v8/finance/chart/"
         f"{quoted}?interval=1d&range={range_}&includeAdjustedClose=false"
     )
-    payload = get_json(url, offline, pause=0.3)
+    payload = get_json(url, offline, pause=pause)
     result = (((payload or {}).get("chart") or {}).get("result") or [None])[0]
     if not result:
         return []
