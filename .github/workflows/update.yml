@@ -62,6 +62,7 @@ jobs:
 
   deploy:
     needs: build
+    # Settings → Pages → Source 必須是 GitHub Actions，否則這裡會 404。
     runs-on: ubuntu-latest
     environment:
       name: github-pages
