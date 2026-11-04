@@ -121,7 +121,6 @@
   function renderUpdated() {
     const data = state.catalog;
     document.getElementById("updated").textContent = "資料更新時間 " + zhWhen(data.generated_at) + "（台北）・收盤日 " + zhDate(data.trade_date);
-    if (data.rule) document.getElementById("rule").textContent = data.rule;
     const count = data.count || (data.stocks || []).length;
     document.getElementById("coverage").textContent = "目前可以找 " + count + " 檔上市股票和ETF。" + (data.coverage || "");
   }
@@ -184,7 +183,7 @@
         ]));
         return;
       }
-      const yes = item.label === "可以抄底" && item.can_bottom;
+      const yes = isGreen(item);
       const card = el("article", { class: "card", id: "stock-" + code }, [
         el("div", { class: "card-top" }, [
           el("h3", { text: item.name + " " + item.code }),
@@ -192,9 +191,9 @@
         ]),
         el("p", { class: "price", text: num(item.close, 2) }),
         el("p", { class: "today " + signClass(item.change_pct), text: todaySentence(item.change_pct) }),
-        el("p", { class: "signal " + (yes ? "yes" : "no"), text: yes ? "可以抄底" : "不行" }),
+        lightRow(yes, false),
         el("p", { class: "reason", text: item.reason || "" }),
-        yes ? el("p", { class: "warn-line", text: "可以抄底只代表條件夠了，不是叫你買。" }) : null,
+        yes ? el("p", { class: "warn-line", text: "綠燈只代表條件夠了，不是叫你買。" }) : null,
       ]);
       const details = el("details", { class: "more" }, [el("summary", { text: "進階資訊" })]);
       const box = el("div", { class: "adv", id: "adv-" + code });
@@ -226,15 +225,16 @@
       })
       .catch(function () {
         clear(box);
-        box.append(el("p", { class: "reason", text: "進階圖表暫時讀不到。上面的可以抄底或不行，仍然是這次算好的結果。" }));
+        box.append(el("p", { class: "reason", text: "進階圖表暫時讀不到。上面的綠燈或紅燈，仍然是這次算好的結果。" }));
       });
   }
 
   function drawDetail(code, box, data) {
     clear(box);
     const bottom = data.bottom || {};
+    box.append(lightRow(isGreen(data), false));
     box.append(el("p", { class: "hint", text: "下面是給想看數字的人。不懂可以跳過。" }));
-    box.append(el("p", { text: "技術分數 " + (data.score == null ? "—" : data.score) + "／6。要 " + (data.cutoff || 3) + " 分以上，主畫面才會寫可以抄底。" }));
+    box.append(el("p", { text: "技術分數 " + (data.score == null ? "—" : data.score) + "／6。要 " + (data.cutoff || 3) + " 分以上才亮綠燈，不到就是紅燈。" }));
     const valuation = data.valuation || {};
     box.append(el("div", { class: "metric" }, [
       metric("本益比", valuation.pe == null ? "—" : num(valuation.pe, 2), "用獲利估價格，越高通常越貴"),
@@ -375,11 +375,24 @@
           onclick: function () { addCode(item.code); },
         }, [
           el("span", { text: item.code + " " + item.name }),
-          el("small", { text: tracked ? "已在清單" : (item.label === "可以抄底" ? "可以抄底" : "不行") }),
+          tracked ? el("small", { text: "已在清單" }) : lightRow(isGreen(item), true),
         ]),
       ]));
     });
     list.hidden = false;
+  }
+
+  function isGreen(item) {
+    return !!(item && item.can_bottom && (item.label === "可以抄底" || item.label === "綠燈 可以抄底"));
+  }
+
+  function lightRow(yes, compact) {
+    const color = yes ? "green" : "red";
+    const words = yes ? "綠燈 可以抄底" : "紅燈 先別買";
+    return el("div", { class: "lamp-row" + (compact ? " compact" : ""), role: "img", "aria-label": words }, [
+      el("span", { class: "lamp " + color + (compact ? " small" : ""), "aria-hidden": "true" }),
+      el("span", { class: "lamp-label " + color, text: words }),
+    ]);
   }
 
   function boot() {

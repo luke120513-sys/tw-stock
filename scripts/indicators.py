@@ -589,7 +589,7 @@ PLAIN_CONDITION = {
     "foreign": "大戶（外資）開始買進",
 }
 
-DIP_RULE = "六個條件裡，至少三個同時出現，才顯示可以抄底；不到三個就是不行。"
+DIP_RULE = "六個條件裡，至少三個同時出現，才亮綠燈；不到三個就是紅燈。"
 
 
 def public_bottom(bottom: dict) -> dict:
