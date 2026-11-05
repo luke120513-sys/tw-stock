@@ -252,6 +252,11 @@ def test_security_filter():
     assert build_site.include_security("00878", "國泰永續高股息")
     assert build_site.include_security("00631L", "元大台灣50正2") is False
     assert build_site.include_security("030001", "某某購") is False
+    assert build_site.include_otc("8069", "元太")
+    assert build_site.include_otc("6488", "環球晶")
+    assert build_site.include_otc("006201", "元大富櫃50")
+    assert build_site.include_otc("00679B", "元大美債20年") is False
+    assert build_site.include_otc("12345A", "某某購") is False
 
 
 def test_binary_dip_signal():

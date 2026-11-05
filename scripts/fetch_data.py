@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import sys
 import time
@@ -750,7 +751,7 @@ def get_json(url: str, offline: bool, pause: float = SLEEP, retries: int = 4):
             cached.write_text(text, encoding="utf-8")
             time.sleep(pause)
             return data
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, http.client.HTTPException) as exc:
             last = str(exc)
             time.sleep(1.5 * (attempt + 1))
     print(f"連線失敗 {url} ({last})")

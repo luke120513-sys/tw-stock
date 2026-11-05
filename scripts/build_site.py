@@ -51,8 +51,23 @@ def main() -> int:
     market = fd.build_market(index_rows, index_source, institutions) if index_rows else None
 
     quotes = load_quotes(offline, used, notes)
+    for item in quotes:
+        item["market"] = "上市"
     universe = [item for item in quotes if include_security(item["code"], item["name"])]
+    otc_quotes = load_otc_quotes(offline, used, notes)
+    listed_codes = {item["code"] for item in universe}
+    otc_count = 0
+    for item in otc_quotes:
+        if item["code"] in listed_codes:
+            continue
+        universe.append(item)
+        otc_count += 1
     universe.sort(key=lambda item: item["code"])
+    codes_only = _flag_codes()
+    if codes_only:
+        universe = [item for item in universe if item["code"] in codes_only]
+        otc_count = sum(1 for item in universe if item.get("market") == "上櫃")
+    print(f"上櫃納入 {otc_count} 檔")
     if limit:
         preferred = set(load_defaults())
         picked = [item for item in universe if item["code"] in preferred]
@@ -65,6 +80,7 @@ def main() -> int:
     print(f"準備抓 {len(universe)} 檔日K")
 
     valuations = fd.fetch_valuations(offline, used, notes)
+    valuations.update(load_otc_valuations(offline, used, notes))
     histories = fetch_histories(universe, offline)
     for item in universe:
         rows = histories.get(item["code"]) or []
@@ -87,6 +103,18 @@ def main() -> int:
             missed_foreign += 1
     if missed_foreign:
         notes.append(f"有 {missed_foreign} 天沒有取得外資買賣超。")
+    otc_missed = 0
+    for day in foreign_dates[-8:]:
+        print(f"上櫃外資買賣超 {day}")
+        extra = fetch_otc_foreign(day, offline, used)
+        if extra:
+            foreign_by_date.setdefault(day, {}).update(extra)
+        else:
+            otc_missed += 1
+    if otc_missed:
+        notes.append(f"有 {otc_missed} 天沒有取得上櫃外資買賣超。")
+    if market is not None:
+        market["otc"] = fetch_otc_index(foreign_dates or [row["date"] for row in index_rows], offline, used, notes)
 
     STOCKS.mkdir(parents=True, exist_ok=True)
     kept = []
@@ -136,7 +164,7 @@ def main() -> int:
         "trade_date": (market or {}).get("date") or trade_date,
         "cutoff": ind.DIP_CUTOFF,
         "rule": ind.DIP_RULE,
-        "coverage": "上市普通股，以及 0050、0056、00878 這類ETF。不含上櫃、權證、槓桿和反向ETF。",
+        "coverage": "上市與上櫃的普通股，以及 0050、0056、00878、006201 這類 ETF。不含興櫃、權證、槓桿和反向 ETF。",
         "count": len(summaries),
         "defaults": load_defaults(),
         "notes": _unique(notes),
@@ -197,6 +225,168 @@ def quotes_from_existing() -> list[dict]:
     return [{"code": item["code"], "name": item["name"]} for item in catalog.get("stocks") or []]
 
 
+def include_otc(code: str, name: str) -> bool:
+    if any(word in name for word in ("購", "售", "牛證", "熊證", "正2", "反1", "槓桿", "反向", "興櫃")):
+        return False
+    if len(code) == 4 and code.isdigit():
+        return True
+    if code.isdigit() and code.startswith("00") and 5 <= len(code) <= 6:
+        return True
+    return False
+
+
+def load_otc_quotes(offline: bool, used: set[str], notes: list[str]) -> list[dict]:
+    payload = fd.get_json(
+        "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+        offline,
+        pause=0.4,
+    )
+    if not isinstance(payload, list):
+        notes.append("這次沒有取得上櫃股票名單。")
+        return []
+    used.add("tpex")
+    rows = []
+    for raw in payload:
+        code = str(raw.get("SecuritiesCompanyCode") or "").strip()
+        name = str(raw.get("CompanyName") or "").strip()
+        if not code or not name or not include_otc(code, name):
+            continue
+        rows.append(
+            {
+                "code": code,
+                "name": name,
+                "market": "上櫃",
+                "date": ind.roc_to_iso(raw.get("Date")),
+                "open": ind.parse_number(raw.get("Open")),
+                "high": ind.parse_number(raw.get("High")),
+                "low": ind.parse_number(raw.get("Low")),
+                "close": ind.parse_number(raw.get("Close")),
+                "volume": ind.parse_number(raw.get("TradingShares")),
+            }
+        )
+    return rows
+
+
+def load_otc_valuations(offline: bool, used: set[str], notes: list[str]) -> dict:
+    payload = fd.get_json(
+        "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis",
+        offline,
+        pause=0.4,
+    )
+    if not isinstance(payload, list):
+        notes.append("這次沒有取得上櫃本益比。")
+        return {}
+    used.add("tpex")
+    output = {}
+    for raw in payload:
+        code = str(raw.get("SecuritiesCompanyCode") or "").strip()
+        if not code:
+            continue
+        output[code] = {
+            "date": ind.roc_to_iso(raw.get("Date")),
+            "name": str(raw.get("CompanyName") or "").strip(),
+            "pe": ind.parse_number(raw.get("PriceEarningRatio")),
+            "dividend_yield": ind.parse_number(raw.get("YieldRatio")),
+            "pb": ind.parse_number(raw.get("PriceBookRatio")),
+            "source": "證券櫃檯買賣中心",
+        }
+    return output
+
+
+def fetch_otc_foreign(day: str, offline: bool, used: set[str]) -> dict:
+    year, month, date = day.split("-")
+    roc = f"{int(year) - 1911}/{month}/{date}"
+    url = (
+        "https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php"
+        f"?l=zh-tw&o=json&se=EW&t=D&d={roc}"
+    )
+    payload = fd.get_json(url, offline, pause=0.45)
+    tables = (payload or {}).get("tables") or []
+    if not tables or not tables[0].get("data"):
+        return {}
+    used.add("tpex")
+    found = {}
+    for raw in tables[0]["data"]:
+        if len(raw) < 5:
+            continue
+        code = str(raw[0]).strip()
+        shares = ind.parse_number(raw[4])
+        if not code or shares is None:
+            continue
+        found[code] = {"name": str(raw[1]).strip(), "net_shares": int(round(shares))}
+    return found
+
+
+def fetch_otc_index(dates: list[str], offline: bool, used: set[str], notes: list[str]) -> dict | None:
+    history = []
+    for day in dates[-30:]:
+        year, month, date = day.split("-")
+        url = (
+            "https://www.tpex.org.tw/www/zh-tw/afterTrading/indexSummary"
+            f"?date={year}/{month}/{date}&response=json"
+        )
+        payload = fd.get_json(url, offline, pause=0.35)
+        point = _otc_index_point(payload, day)
+        if point:
+            history.append(point)
+            used.add("tpex")
+    if not history:
+        payload = fd.get_json("https://www.tpex.org.tw/openapi/v1/tpex_index", offline, pause=0.3)
+        if isinstance(payload, list):
+            for raw in payload:
+                day = ind.roc_to_iso(raw.get("Date")) or (
+                    f"{raw['Date'][:4]}-{raw['Date'][4:6]}-{raw['Date'][6:8]}" if str(raw.get("Date") or "").startswith("20") else None
+                )
+                close = ind.parse_number(raw.get("Close"))
+                change = ind.parse_number(raw.get("Change"))
+                if not day or close is None:
+                    continue
+                base = close - change if change is not None else None
+                pct = (change / base * 100.0) if base else None
+                history.append(
+                    {
+                        "date": day,
+                        "close": ind._round(close, 2),
+                        "change": ind._round(change, 2),
+                        "change_pct": ind._round(pct, 2),
+                    }
+                )
+            if history:
+                used.add("tpex")
+    if not history:
+        notes.append("這次沒有取得櫃買指數。")
+        return None
+    latest = history[-1]
+    return {
+        "name": "櫃買指數",
+        "date": latest["date"],
+        "close": latest["close"],
+        "change": latest["change"],
+        "change_pct": latest["change_pct"],
+        "source": "證券櫃檯買賣中心",
+        "history": history,
+    }
+
+
+def _otc_index_point(payload: dict | None, day: str) -> dict | None:
+    for table in (payload or {}).get("tables") or []:
+        for raw in table.get("data") or []:
+            if not raw or str(raw[0]).strip() != "櫃買指數":
+                continue
+            close = ind.parse_number(raw[1] if len(raw) > 1 else None)
+            change = ind.parse_number(raw[2] if len(raw) > 2 else None)
+            pct = ind.parse_number(raw[3] if len(raw) > 3 else None)
+            if close is None:
+                return None
+            return {
+                "date": day,
+                "close": ind._round(close, 2),
+                "change": ind._round(change, 2),
+                "change_pct": ind._round(pct, 2),
+            }
+    return None
+
+
 def include_security(code: str, name: str) -> bool:
     if any(word in name for word in ("購", "售", "牛證", "熊證", "正2", "反1", "槓桿", "反向")):
         return False
@@ -217,7 +407,8 @@ def fetch_histories(universe: list[dict], offline: bool) -> dict[str, list[dict]
     def one(item: dict) -> None:
         if not offline:
             limiter.wait()
-        rows = fd.fetch_yahoo(f"{item['code']}.TW", "1y", offline, pause=0.0)
+        suffix = "TWO" if item.get("market") == "上櫃" else "TW"
+        rows = fd.fetch_yahoo(f"{item['code']}.{suffix}", "1y", offline, pause=0.0)
         with lock:
             result[item["code"]] = rows
             done["n"] += 1
@@ -277,6 +468,7 @@ def build_stock(item: dict, rows: list[dict], foreign_by_date: dict, valuation: 
     return {
         "code": item["code"],
         "name": item["name"],
+        "market": item.get("market") or "上市",
         "date": latest.get("date"),
         "close": ind._round(latest.get("close"), 2),
         "change": ind._round(change, 2),
@@ -316,6 +508,7 @@ def summary_of(payload: dict) -> dict:
     return {
         "code": payload["code"],
         "name": payload.get("name") or payload["code"],
+        "market": payload.get("market") or "上市",
         "close": payload.get("close"),
         "change_pct": payload.get("change_pct"),
         "can_bottom": bool(payload.get("can_bottom")),
@@ -347,6 +540,7 @@ def public_market(market: dict | None) -> dict | None:
         "plain_flow": "、".join(bits),
         "history": (market.get("history") or [])[-70:],
         "institutions": market.get("institutions"),
+        "otc": market.get("otc"),
     }
 
 
@@ -385,6 +579,13 @@ def _flag_int(flag: str) -> int | None:
     if flag not in sys.argv:
         return None
     return int(sys.argv[sys.argv.index(flag) + 1])
+
+
+def _flag_codes() -> set[str] | None:
+    if "--codes" not in sys.argv:
+        return None
+    raw = sys.argv[sys.argv.index("--codes") + 1]
+    return {part.strip() for part in raw.split(",") if part.strip()}
 
 
 class RateLimiter:

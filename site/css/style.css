@@ -136,6 +136,17 @@ input[type="search"] {
 .flat { color: var(--muted); }
 .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .card h3 { margin: 0; font-size: 18px; }
+.mkt {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
 .text-btn {
   border: 1px solid var(--line);
   background: var(--card);

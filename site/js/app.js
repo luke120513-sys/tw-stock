@@ -138,7 +138,7 @@
     }
     hits.forEach(function (item) {
       root.append(el("article", { class: "card" }, [
-        el("h3", { text: item.name + " " + item.code }),
+        nameHeading(item),
         el("p", { class: "today " + signClass(item.change_pct), text: todaySentence(item.change_pct) }),
         lightRow(isGreen(item), true),
       ].concat(stockAlerts(item).map(function (alert) {
@@ -170,7 +170,7 @@
     const updated = document.getElementById("updated");
     if (updated) updated.textContent = "資料更新時間 " + zhWhen(data.generated_at) + "（台北）・收盤日 " + zhDate(data.trade_date);
     const count = data.count || (data.stocks || []).length;
-    document.getElementById("coverage").textContent = "目前可以找 " + count + " 檔上市股票和ETF。" + (data.coverage || "");
+    document.getElementById("coverage").textContent = "目前可以找 " + count + " 檔。" + (data.coverage || "");
   }
 
   function renderMarket() {
@@ -190,6 +190,32 @@
       market.plain_flow ? el("p", { class: "market-flow", text: "大戶今天：" + market.plain_flow + "。" }) : null
       ])
     );
+    if (market.otc && market.otc.close != null) {
+      const otc = market.otc;
+      const otcCard = el("div", { class: "card" }, [
+        el("p", { class: "hint", text: "櫃買指數" }),
+        el("p", { class: "price", text: num(otc.close, 2) }),
+        el("p", { class: "today " + signClass(otc.change_pct), text: todaySentence(otc.change_pct) }),
+        el("p", { class: "hint", text: "上櫃市場的大盤。" }),
+      ]);
+      if (otc.history && otc.history.length > 2) {
+        const details = el("details", { class: "more" }, [
+          el("summary", { text: "進階資訊" }),
+          el("canvas", { id: "chart-otc", class: "chart", role: "img" }),
+        ]);
+        details.addEventListener("toggle", function () {
+          if (!details.open || !window.TWCharts) return;
+          TWCharts.draw(document.getElementById("chart-otc"), {
+            aria: "櫃買指數最近走勢",
+            series: otc.history,
+            lines: [{ key: "close", color: cssColor("--ink"), width: 1.8 }],
+            format: function (value) { return num(value, 2); },
+          });
+        });
+        otcCard.append(details);
+      }
+      root.append(otcCard);
+    }
     const details = el("details", { class: "more" }, [
       el("summary", { text: "進階資訊" }),
       el("p", { class: "hint", text: "下面用市場上的正式名稱。看不懂可以跳過。" }),
@@ -229,14 +255,14 @@
             el("h3", { text: code }),
             el("button", { class: "text-btn", type: "button", text: "移除", onclick: function () { removeCode(code); } }),
           ]),
-          el("p", { class: "reason", text: "找不到這支股票。目前只收錄上市股票和常見 ETF。" }),
+          el("p", { class: "reason", text: "找不到這支股票。目前收錄上市和上櫃的普通股與常見 ETF。" }),
         ]));
         return;
       }
       const yes = isGreen(item);
       const card = el("article", { class: "card", id: "stock-" + code }, [
         el("div", { class: "card-top" }, [
-          el("h3", { text: item.name + " " + item.code }),
+          nameHeading(item),
           el("button", { class: "text-btn", type: "button", text: "移除", onclick: function () { removeCode(code); } }),
         ]),
         el("p", { class: "price", text: num(item.close, 2) }),
@@ -416,7 +442,7 @@
     }).slice(0, 8);
     if (!hits.length) {
       list.hidden = false;
-      list.append(el("li", {}, [el("p", { class: "hint", text: "找不到這支股票。目前只收錄上市股票和常見 ETF。" })]));
+      list.append(el("li", {}, [el("p", { class: "hint", text: "找不到這支股票。目前收錄上市和上櫃的普通股與常見 ETF。" })]));
       return;
     }
     hits.forEach(function (item) {
@@ -426,12 +452,22 @@
           type: "button",
           onclick: function () { addCode(item.code); },
         }, [
-          el("span", { text: item.code + " " + item.name }),
+          el("span", {}, [
+            item.code + " " + item.name + " ",
+            item.market ? el("span", { class: "mkt", text: item.market }) : null,
+          ]),
           tracked ? el("small", { text: "已在清單" }) : lightRow(isGreen(item), true),
         ]),
       ]));
     });
     list.hidden = false;
+  }
+
+  function nameHeading(item) {
+    return el("h3", {}, [
+      item.name + " " + item.code + " ",
+      item.market ? el("span", { class: "mkt", text: item.market }) : null,
+    ]);
   }
 
   function isGreen(item) {
