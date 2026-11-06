@@ -74,6 +74,39 @@ header small { display: block; font-size: 11px; opacity: .9; font-weight: 400; }
   min-height: 40px;
   padding: 0 12px;
 }
+#refresh {
+  border: 0;
+  background: #fff;
+  color: #1f4e79;
+  font-weight: 800;
+  font-size: 17px;
+  border-radius: 12px;
+  min-height: 46px;
+  min-width: 76px;
+  padding: 0 14px;
+}
+#refresh:disabled { opacity: .65; }
+#refresh.busy::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  border: 2px solid #1f4e79;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.flash {
+  margin: 8px 0 0;
+  background: #fff1de;
+  color: #8a4b00;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.flash[hidden] { display: none; }
 main { padding: 12px; max-width: 520px; margin: 0 auto; }
 .panel, .card {
   background: var(--card);

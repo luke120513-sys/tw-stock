@@ -155,9 +155,7 @@
       const button = document.querySelector('nav [data-tab="' + id + '"]');
       if (button) button.classList.toggle("on", id === name);
     });
-    const titles = { watch: "看能不能抄底", market: "今天的大盤", alerts: "追蹤股的異動", more: "說明與設定" };
-    const sub = document.getElementById("subtitle");
-    if (sub) sub.textContent = titles[name];
+    if (name === "watch" && state.catalog) renderUpdated();
     const hash = "#" + name;
     if (location.hash !== hash) {
       if (push) history.pushState(null, "", hash);
@@ -165,10 +163,34 @@
     }
   }
 
+  function shortWhen(iso) {
+    if (!iso) return "—";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Taipei",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const pick = function (type) {
+      const found = parts.find(function (part) { return part.type === type; });
+      return found ? found.value : "";
+    };
+    return pick("month") + "/" + pick("day") + " " + pick("hour") + ":" + pick("minute");
+  }
+
   function renderUpdated() {
     const data = state.catalog;
+    const when = shortWhen(data.quote_at || data.generated_at);
+    const session = data.quote_session === "intraday" ? "盤中即時" : "今日收盤";
+    const line = "最後更新：" + when + " · " + session;
     const updated = document.getElementById("updated");
-    if (updated) updated.textContent = "資料更新時間 " + zhWhen(data.generated_at) + "（台北）・收盤日 " + zhDate(data.trade_date);
+    if (updated) updated.textContent = line + "・收盤資料日 " + zhDate(data.trade_date);
+    const sub = document.getElementById("subtitle");
+    if (sub) sub.textContent = line;
     const count = data.count || (data.stocks || []).length;
     document.getElementById("coverage").textContent = "目前可以找 " + count + " 檔。" + (data.coverage || "");
   }
@@ -196,7 +218,7 @@
         el("p", { class: "hint", text: "櫃買指數" }),
         el("p", { class: "price", text: num(otc.close, 2) }),
         el("p", { class: "today " + signClass(otc.change_pct), text: todaySentence(otc.change_pct) }),
-        el("p", { class: "hint", text: "上櫃市場的大盤。" }),
+        el("p", { class: "hint", text: "上櫃市場的大盤。" + (state.catalog && state.catalog.quote_session === "intraday" ? " 上面的數字是盤中，圖是每日收盤。" : "") }),
       ]);
       if (otc.history && otc.history.length > 2) {
         const details = el("details", { class: "more" }, [
@@ -309,6 +331,9 @@
     clear(box);
     const bottom = data.bottom || {};
     box.append(lightRow(isGreen(data), false));
+    if (state.catalog && state.catalog.quote_session === "intraday") {
+      box.append(el("p", { class: "hint", text: "上面的價格如果是盤中，綠燈和紅燈仍是用每天收盤算出來的，盤中價格變了也不會跟著改燈。" }));
+    }
     box.append(el("p", { class: "hint", text: "下面是給想看數字的人。不懂可以跳過。" }));
     box.append(el("p", { text: "技術分數 " + (data.score == null ? "—" : data.score) + "／6。要 " + (data.cutoff || 3) + " 分以上才亮綠燈，不到就是紅燈。" }));
     const valuation = data.valuation || {};
@@ -483,8 +508,43 @@
     ]);
   }
 
+  function refreshQuotes() {
+    const button = document.getElementById("refresh");
+    const flash = document.getElementById("flash");
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    button.classList.add("busy");
+    button.textContent = "更新中…";
+    if (flash) flash.hidden = true;
+    fetch(sitePath("data/catalog.json?t=" + Date.now()), { cache: "no-store" })
+      .then(function (response) {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json();
+      })
+      .then(function (data) {
+        state.catalog = data;
+        renderUpdated();
+        renderMarket();
+        renderList();
+        renderAlerts();
+        if (flash) flash.hidden = true;
+      })
+      .catch(function () {
+        if (flash) {
+          flash.hidden = false;
+          flash.textContent = "這次沒有更新到，請稍後再試。畫面上仍是上次的價格。";
+        }
+      })
+      .then(function () {
+        button.disabled = false;
+        button.classList.remove("busy");
+        button.textContent = "更新";
+      });
+  }
+
   function boot() {
     paintTheme();
+    document.getElementById("refresh").addEventListener("click", refreshQuotes);
     document.getElementById("theme").addEventListener("click", function () {
       const next = themeNow() === "dark" ? "light" : "dark";
       document.documentElement.dataset.theme = next;

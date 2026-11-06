@@ -174,7 +174,16 @@ def main() -> int:
     }
     if "yahoo" not in catalog["sources_used"]:
         catalog["sources_used"].append("yahoo")
+    catalog["quote_at"] = now.isoformat(timespec="seconds")
+    catalog["quote_session"] = "intraday" if in_trading_session(now) else "close"
     write_json(CATALOG, catalog)
+    if catalog["quote_session"] == "intraday":
+        try:
+            import refresh_quotes
+
+            refresh_quotes.update_catalog(CATALOG)
+        except Exception as exc:
+            print(f"盤中報價這次沒寫入：{exc}")
     stale = DATA / "latest.json"
     if stale.exists():
         stale.unlink()
@@ -579,6 +588,14 @@ def _flag_int(flag: str) -> int | None:
     if flag not in sys.argv:
         return None
     return int(sys.argv[sys.argv.index(flag) + 1])
+
+
+def in_trading_session(moment: datetime) -> bool:
+    from datetime import time as dtime
+
+    if moment.weekday() >= 5:
+        return False
+    return dtime(9, 0) <= moment.time() < dtime(13, 35)
 
 
 def _flag_codes() -> set[str] | None:

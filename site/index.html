@@ -31,8 +31,9 @@
   <a class="skip" href="#main">跳到內容</a>
   <header>
     <img src="icon-192.png" alt="">
-    <h1>台股觀察<small id="subtitle">看能不能抄底</small></h1>
+    <h1>台股觀察<small id="subtitle">最後更新：讀取中</small></h1>
     <button id="theme" type="button">深色</button>
+    <button id="refresh" type="button">更新</button>
   </header>
   <main id="main">
     <section id="panel-watch">
@@ -41,6 +42,8 @@
       <p class="legend-lights"><span class="lamp green small" aria-hidden="true"></span>綠燈＝可以抄底<span class="lamp red small" aria-hidden="true"></span>紅燈＝不行</p>
       <p class="soft">只是參考，不是投資建議。就算亮綠燈，股價還是可能繼續跌。</p>
       <p id="updated" class="updated">資料載入中…</p>
+      <p id="flash" class="flash" role="status" hidden></p>
+      <p class="hint">按「更新」會讀最新報價。交易時間大約每 15 分鐘抓一次，不是每秒跳動。</p>
       <section class="search-box panel" aria-label="加入股票">
         <label for="q">加入想追蹤的股票</label>
         <input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="輸入代號或名稱，例如 2603 或 長榮">
